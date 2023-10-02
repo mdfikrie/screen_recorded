@@ -31,6 +31,7 @@ dependencies:
   hh_screen_recorder: ^1.6.5
   path_provider: ^2.1.1
   video_compress: ^3.1.2
+  process_run: ^0.13.1
   flutter:
     sdk: flutter
 
@@ -48,7 +49,7 @@ dev_dependencies:
   # activated in the `analysis_options.yaml` file located at the root of your
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
-  flutter_lints: ^2.0.0
+  # flutter_lints: ^2.0.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
