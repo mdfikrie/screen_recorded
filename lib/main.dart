@@ -43,11 +43,23 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   var isPlay = false;
   var videoPathList = [];
-  Process? ffmpegProcess;
-  final shell = Shell();
-  final ffmpegPath =
-      r'C:\Users\dzulfikri\Downloads\Compressed\ffmpeg-1\bin\ffmpeg.exe';
   Process? process;
+  var ffmpegPath = "";
+
+  Future<String> copyFFmpegFromAssets() async {
+    final dir = await Directory.current;
+    final path = '${dir.path}/ffmpeg.exe';
+    if (File(path).exists() == false) {
+      final data = await rootBundle.load('assets/ffmpeg/ffmpeg.exe');
+      final buffer = data.buffer.asUint8List();
+      final file = await File(path).writeAsBytes(buffer);
+      ffmpegPath = file.path;
+    } else {
+      ffmpegPath = path;
+    }
+    setState(() {});
+    return ffmpegPath;
+  }
 
   Future<void> startRecording({required String fileName}) async {
     if (Platform.isMacOS) {
@@ -65,6 +77,8 @@ class _MyHomePageState extends State<MyHomePage> {
         print('Failed to start recording: $e');
       }
     } else {
+      ffmpegPath = await copyFFmpegFromAssets();
+      print(ffmpegPath);
       try {
         if (process != null) {
           await process?.exitCode;
@@ -72,21 +86,47 @@ class _MyHomePageState extends State<MyHomePage> {
         // final arguments =
         //     '-f gdigrab -framerate 30 -i desktop -c:v libx264 -preset ultrafast output.mkv';
         // await shell.run('$ffmpegPath $arguments');
-        final ffmpegPath =
-            'C:\\Users\\dzulfikri\\Downloads\\Compressed\\ffmpeg-1\\bin\\ffmpeg.exe';
+        // final ffmpegPath = '.\\ffmpeg.exe';
+        var fileName = DateTime.now().microsecondsSinceEpoch;
+        final outputFile = File('${Directory.current.path}/$fileName.mp4');
         final arguments = [
           '-f',
           'gdigrab',
           '-framerate',
-          '30',
+          '20',
           '-i',
           'desktop',
+          '-vf',
+          'scale=iw*0.8:ih*0.8',
           '-c:v',
           'libx264',
           '-preset',
           'ultrafast',
-          'output.mp4'
+          "-profile:v",
+          "high",
+          "-crf",
+          "35", // Nilai antara 18 (kualitas tinggi) hingga 28 (kualitas rendah). Default adalah 23.
+          "-pix_fmt",
+          "yuv420p",
+          outputFile.path,
         ];
+
+        // final arguments = [
+        //   '-f',
+        //   'gdigrab',
+        //   '-framerate',
+        //   '20', // Turunkan framerate ke 20 fps
+        //   '-i',
+        //   'desktop',
+        //   '-c:v',
+        //   'libx264',
+        //   '-preset',
+        //   'fast', // Gunakan preset "fast"
+        //   '-b:v',
+        //   '1000k', // Tentukan bitrate
+        //   outputFile.path,
+        // ];
+        print(outputFile.path);
 
         process = await Process.start(ffmpegPath, arguments);
 
@@ -138,25 +178,55 @@ class _MyHomePageState extends State<MyHomePage> {
 
   Future<void> compressVideo() async {
     try {
-      // videoPathList.forEach((element) async {
-      // var inputName = p.basename(element);
-      // var outputName = "compress-$inputName";
-      // var outputPath = element.toString().replaceAll(inputName, outputName);
-      // final result = await screenRecordingChannel.invokeMethod(
-      //     "compressVideo", {"input_url": element, "output_url": outputPath});
-      // print(result);
-      final path =
-          "/Users/user/Library/Containers/com.example.screenRecorded/Data/Documents/recording/16959725489622.mp4";
-      MediaInfo? mediaInfo = await VideoCompress.compressVideo(
-        path,
-        quality: VideoQuality.Res960x540Quality,
-        deleteOrigin: false, // It's false by default
-        frameRate: 5,
-        includeAudio: false,
-      );
-      if (mediaInfo != null) {
-        print(mediaInfo.filesize);
-        print(mediaInfo.path);
+      if (Platform.isMacOS) {
+        // videoPathList.forEach((element) async {
+        // var inputName = p.basename(element);
+        // var outputName = "compress-$inputName";
+        // var outputPath = element.toString().replaceAll(inputName, outputName);
+        // final result = await screenRecordingChannel.invokeMethod(
+        //     "compressVideo", {"input_url": element, "output_url": outputPath});
+        // print(result);
+        final path =
+            "/Users/user/Library/Containers/com.example.screenRecorded/Data/Documents/recording/16959725489622.mp4";
+        MediaInfo? mediaInfo = await VideoCompress.compressVideo(
+          path,
+          quality: VideoQuality.Res960x540Quality,
+          deleteOrigin: false, // It's false by default
+          frameRate: 5,
+          includeAudio: false,
+        );
+        if (mediaInfo != null) {
+          print(mediaInfo.filesize);
+          print(mediaInfo.path);
+        }
+      } else {
+        ffmpegPath = await copyFFmpegFromAssets();
+        var fileInput = "1696324548292400.mp4";
+        var fileOutput = "output2.mp4";
+        var arguments = [
+          "-i",
+          fileInput,
+          "-c:v",
+          "libx264",
+          "-profile:v",
+          "high",
+          "-crf",
+          "28", // Nilai antara 18 (kualitas tinggi) hingga 28 (kualitas rendah). Default adalah 23.
+          "-pix_fmt",
+          "yuv420p",
+          fileOutput
+        ];
+
+        var process = await Process.start(ffmpegPath, arguments);
+        // Mendengarkan STDOUT
+        process.stdout.transform(utf8.decoder).listen((data) {
+          print('STDOUT: $data');
+        });
+
+        // Mendengarkan STDERR
+        process.stderr.transform(utf8.decoder).listen((data) {
+          print('STDERR: $data');
+        });
       }
       // });
     } catch (e) {
@@ -177,11 +247,20 @@ class _MyHomePageState extends State<MyHomePage> {
         title: Text(widget.title),
       ),
       body: Center(
-        child: Text(
-          isPlay == true
-              ? "Video recording running.."
-              : "Video recording paused.",
-          style: Theme.of(context).textTheme.headlineMedium,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              ffmpegPath,
+              textAlign: TextAlign.center,
+            ),
+            Text(
+              isPlay == true
+                  ? "Video recording running.."
+                  : "Video recording paused.",
+              style: Theme.of(context).textTheme.headlineMedium,
+            ),
+          ],
         ),
       ),
       floatingActionButton: Row(
