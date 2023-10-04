@@ -31,7 +31,7 @@ dependencies:
   hh_screen_recorder: ^1.6.5
   path_provider: ^2.1.1
   video_compress: ^3.1.2
-  process_run: ^0.13.1
+  intl: ^0.18.1
   flutter:
     sdk: flutter
 

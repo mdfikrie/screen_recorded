@@ -3,8 +3,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:process_run/shell.dart';
 import 'package:video_compress/video_compress.dart';
 
 const screenRecordingChannel =
@@ -45,6 +45,7 @@ class _MyHomePageState extends State<MyHomePage> {
   var videoPathList = [];
   Process? process;
   var ffmpegPath = "";
+  var outputFile = "";
 
   Future<String> copyFFmpegFromAssets() async {
     final dir = await Directory.current;
@@ -83,21 +84,15 @@ class _MyHomePageState extends State<MyHomePage> {
         if (process != null) {
           await process?.exitCode;
         }
-        // final arguments =
-        //     '-f gdigrab -framerate 30 -i desktop -c:v libx264 -preset ultrafast output.mkv';
-        // await shell.run('$ffmpegPath $arguments');
-        // final ffmpegPath = '.\\ffmpeg.exe';
         var fileName = DateTime.now().microsecondsSinceEpoch;
-        final outputFile = File('${Directory.current.path}/$fileName.mp4');
+        outputFile = File('${Directory.current.path}/$fileName.mp4').path;
         final arguments = [
           '-f',
           'gdigrab',
           '-framerate',
-          '20',
+          '1',
           '-i',
           'desktop',
-          '-vf',
-          'scale=iw*0.8:ih*0.8',
           '-c:v',
           'libx264',
           '-preset',
@@ -108,25 +103,10 @@ class _MyHomePageState extends State<MyHomePage> {
           "35", // Nilai antara 18 (kualitas tinggi) hingga 28 (kualitas rendah). Default adalah 23.
           "-pix_fmt",
           "yuv420p",
-          outputFile.path,
+          outputFile,
         ];
 
-        // final arguments = [
-        //   '-f',
-        //   'gdigrab',
-        //   '-framerate',
-        //   '20', // Turunkan framerate ke 20 fps
-        //   '-i',
-        //   'desktop',
-        //   '-c:v',
-        //   'libx264',
-        //   '-preset',
-        //   'fast', // Gunakan preset "fast"
-        //   '-b:v',
-        //   '1000k', // Tentukan bitrate
-        //   outputFile.path,
-        // ];
-        print(outputFile.path);
+        print(outputFile);
 
         process = await Process.start(ffmpegPath, arguments);
 
@@ -139,11 +119,7 @@ class _MyHomePageState extends State<MyHomePage> {
         process!.stderr.transform(utf8.decoder).listen((data) {
           print('STDERR: $data');
         });
-        await Future.delayed(Duration(seconds: 5));
 
-        // Menunggu proses untuk selesai dan mendapatkan exit code
-        // final exitCode = await process!.exitCode;
-        // print('Exit code: $exitCode');
         print('Recording started');
       } catch (e) {
         print('Error starting recording: $e');
@@ -161,14 +137,40 @@ class _MyHomePageState extends State<MyHomePage> {
       }
     } else {
       try {
-        // await Process.run('taskkill', ['/PID', pid.toString(), '/F']);
-        // final arguments =
-        //     "-i output.mkv -c:v libx264 -profile:v high -pix_fmt yuv420p output.mp4";
-        // await shell.kill();
-        // shell.run('$ffmpegPath $arguments');
-        // await shell.run("taskkill /f /im ffmpeg.exe");
         process!.stdin.writeln('q');
+        await Future.delayed(Duration(seconds: 2));
+        print("data akan di compress");
+        var fileOutput = File(
+                '${Directory.current.path}/${DateFormat('dd-M-y').format(DateTime.now())}.${DateTime.now().millisecondsSinceEpoch}.mp4')
+            .path;
+        var arguments = [
+          "-i",
+          outputFile,
+          "-c:v",
+          "libx264",
+          "-profile:v",
+          "high",
+          "-crf",
+          "35", // Nilai antara 18 (kualitas tinggi) hingga 28 (kualitas rendah). Default adalah 23.
+          "-pix_fmt",
+          "yuv420p",
+          fileOutput
+        ];
+        process = await Process.start(ffmpegPath, arguments);
+        // Mendengarkan STDOUT
+        process!.stdout.transform(utf8.decoder).listen((data) {
+          print('STDOUT: $data');
+        });
 
+        // Mendengarkan STDERR
+        process!.stderr.transform(utf8.decoder).listen((data) {
+          print('STDERR: $data');
+        });
+        await Future.delayed(Duration(seconds: 2));
+        var beforeCompressed = File(outputFile);
+        if (await beforeCompressed.exists() == true) {
+          await File(outputFile).delete();
+        }
         print('Recording stopped');
       } catch (e) {
         print('Error stopping recording: $e');
@@ -179,13 +181,6 @@ class _MyHomePageState extends State<MyHomePage> {
   Future<void> compressVideo() async {
     try {
       if (Platform.isMacOS) {
-        // videoPathList.forEach((element) async {
-        // var inputName = p.basename(element);
-        // var outputName = "compress-$inputName";
-        // var outputPath = element.toString().replaceAll(inputName, outputName);
-        // final result = await screenRecordingChannel.invokeMethod(
-        //     "compressVideo", {"input_url": element, "output_url": outputPath});
-        // print(result);
         final path =
             "/Users/user/Library/Containers/com.example.screenRecorded/Data/Documents/recording/16959725489622.mp4";
         MediaInfo? mediaInfo = await VideoCompress.compressVideo(
@@ -201,17 +196,21 @@ class _MyHomePageState extends State<MyHomePage> {
         }
       } else {
         ffmpegPath = await copyFFmpegFromAssets();
-        var fileInput = "1696324548292400.mp4";
-        var fileOutput = "output2.mp4";
+        var fileOutput = outputFile = File(
+                '${Directory.current.path}/${DateFormat('dd-M-y').format(DateTime.now())}.${DateTime.now().millisecondsSinceEpoch}.mp4')
+            .path;
+        ;
         var arguments = [
           "-i",
-          fileInput,
+          "1696403668968869.mp4",
           "-c:v",
           "libx264",
           "-profile:v",
           "high",
+          // "-b:v",
+          // "57k",
           "-crf",
-          "28", // Nilai antara 18 (kualitas tinggi) hingga 28 (kualitas rendah). Default adalah 23.
+          "35", // Nilai antara 18 (kualitas tinggi) hingga 28 (kualitas rendah). Default adalah 23.
           "-pix_fmt",
           "yuv420p",
           fileOutput
