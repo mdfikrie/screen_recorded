@@ -1,11 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:video_compress/video_compress.dart';
 
 const screenRecordingChannel =
     MethodChannel("com.time_tracker/screen_recording");
@@ -48,25 +46,41 @@ class _MyHomePageState extends State<MyHomePage> {
   var outputFile = "";
 
   Future<String> copyFFmpegFromAssets() async {
-    final dir = await Directory.current;
-    final path = '${dir.path}/ffmpeg.exe';
-    if (File(path).exists() == false) {
-      final data = await rootBundle.load('assets/ffmpeg/ffmpeg.exe');
-      final buffer = data.buffer.asUint8List();
-      final file = await File(path).writeAsBytes(buffer);
-      ffmpegPath = file.path;
+    final dir = await getTemporaryDirectory();
+    if (Platform.isMacOS) {
+      final path = '${dir.path}/ffmpeg';
+      if (await File(path).exists() == false) {
+        print("file belum ada");
+        final data = await rootBundle.load('assets/macos/ffmpeg');
+        final buffer = data.buffer.asUint8List();
+        final file = await File(path).writeAsBytes(buffer);
+        await Process.run('chmod', ['+x', file.path]);
+        ffmpegPath = file.path;
+      } else {
+        ffmpegPath = path;
+      }
+      setState(() {});
+      return ffmpegPath;
     } else {
-      ffmpegPath = path;
+      final path = '${dir.path}/ffmpeg.exe';
+      if (File(path).exists() == false) {
+        final data = await rootBundle.load('assets/ffmpeg/ffmpeg.exe');
+        final buffer = data.buffer.asUint8List();
+        final file = await File(path).writeAsBytes(buffer);
+        ffmpegPath = file.path;
+      } else {
+        ffmpegPath = path;
+      }
+      setState(() {});
+      return ffmpegPath;
     }
-    setState(() {});
-    return ffmpegPath;
   }
 
   Future<void> startRecording({required String fileName}) async {
     if (Platform.isMacOS) {
+      final directory = await getTemporaryDirectory();
+      final customPath = directory.path + "/recording";
       try {
-        final directory = await getApplicationDocumentsDirectory();
-        final customPath = directory.path + "/recording";
         final path =
             await screenRecordingChannel.invokeMethod('startRecording', {
           "file_name": fileName,
@@ -132,17 +146,72 @@ class _MyHomePageState extends State<MyHomePage> {
       try {
         await screenRecordingChannel.invokeMethod('stopRecording');
         print('Recording stopped');
+        compressVideo();
       } catch (e) {
         print('Failed to stop recording: $e');
       }
+      // process!.stdin.writeln('q');
     } else {
       try {
         process!.stdin.writeln('q');
         await Future.delayed(Duration(seconds: 2));
         print("data akan di compress");
-        var fileOutput = File(
+        compressVideo();
+        print('Recording stopped');
+      } catch (e) {
+        print('Error stopping recording: $e');
+      }
+    }
+  }
+
+  Future<void> compressVideo() async {
+    try {
+      if (Platform.isMacOS) {
+        ffmpegPath = await copyFFmpegFromAssets();
+        print(ffmpegPath);
+        final directory = await getTemporaryDirectory();
+        final customPath = directory.path + "/recording/output1.mp4";
+        videoPathList.forEach((element) async {
+          element;
+          var arguments = [
+            "-i",
+            element as String,
+            "-c:v",
+            "libx264",
+            "-profile:v",
+            "high",
+            "-crf",
+            "35", // Nilai antara 18 (kualitas tinggi) hingga 28 (kualitas rendah). Default adalah 23.
+            "-pix_fmt",
+            "yuv420p",
+            customPath,
+          ];
+
+          var process = await Process.start(ffmpegPath, arguments);
+          process.stdout.transform(utf8.decoder).listen((data) {
+            print('STDOUT: $data');
+          });
+
+          // Mendengarkan STDERR
+          process.stderr.transform(utf8.decoder).listen((data) {
+            print('STDERR: $data');
+          });
+          int result = await process.exitCode;
+          if (result == 0) {
+            print("Kompresi berhasil!");
+            if (await File(element).exists() == true) {
+              File(element).delete();
+            }
+          } else {
+            print("Terjadi kesalahan saat kompresi.");
+          }
+        });
+      } else {
+        ffmpegPath = await copyFFmpegFromAssets();
+        var fileOutput = outputFile = File(
                 '${Directory.current.path}/${DateFormat('dd-M-y').format(DateTime.now())}.${DateTime.now().millisecondsSinceEpoch}.mp4')
             .path;
+        ;
         var arguments = [
           "-i",
           outputFile,
@@ -166,66 +235,15 @@ class _MyHomePageState extends State<MyHomePage> {
         process!.stderr.transform(utf8.decoder).listen((data) {
           print('STDERR: $data');
         });
-        await Future.delayed(Duration(seconds: 2));
-        var beforeCompressed = File(outputFile);
-        if (await beforeCompressed.exists() == true) {
-          await File(outputFile).delete();
+        int result = await process!.exitCode;
+        if (result == 0) {
+          print("Kompresi berhasil!");
+          if (await File(outputFile).exists() == true) {
+            File(outputFile).delete();
+          }
+        } else {
+          print("Terjadi kesalahan saat kompresi.");
         }
-        print('Recording stopped');
-      } catch (e) {
-        print('Error stopping recording: $e');
-      }
-    }
-  }
-
-  Future<void> compressVideo() async {
-    try {
-      if (Platform.isMacOS) {
-        final path =
-            "/Users/user/Library/Containers/com.example.screenRecorded/Data/Documents/recording/16959725489622.mp4";
-        MediaInfo? mediaInfo = await VideoCompress.compressVideo(
-          path,
-          quality: VideoQuality.Res960x540Quality,
-          deleteOrigin: false, // It's false by default
-          frameRate: 5,
-          includeAudio: false,
-        );
-        if (mediaInfo != null) {
-          print(mediaInfo.filesize);
-          print(mediaInfo.path);
-        }
-      } else {
-        ffmpegPath = await copyFFmpegFromAssets();
-        var fileOutput = outputFile = File(
-                '${Directory.current.path}/${DateFormat('dd-M-y').format(DateTime.now())}.${DateTime.now().millisecondsSinceEpoch}.mp4')
-            .path;
-        ;
-        var arguments = [
-          "-i",
-          "1696403668968869.mp4",
-          "-c:v",
-          "libx264",
-          "-profile:v",
-          "high",
-          // "-b:v",
-          // "57k",
-          "-crf",
-          "35", // Nilai antara 18 (kualitas tinggi) hingga 28 (kualitas rendah). Default adalah 23.
-          "-pix_fmt",
-          "yuv420p",
-          fileOutput
-        ];
-
-        var process = await Process.start(ffmpegPath, arguments);
-        // Mendengarkan STDOUT
-        process.stdout.transform(utf8.decoder).listen((data) {
-          print('STDOUT: $data');
-        });
-
-        // Mendengarkan STDERR
-        process.stderr.transform(utf8.decoder).listen((data) {
-          print('STDERR: $data');
-        });
       }
       // });
     } catch (e) {

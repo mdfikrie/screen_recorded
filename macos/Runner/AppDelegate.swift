@@ -69,11 +69,13 @@ class AppDelegate: FlutterAppDelegate {
         for  i in 1...screens.count{
             let captureSession = AVCaptureSession()
             captureSessions.append(captureSession)
+            captureSession.sessionPreset = .hd1280x720
             let screen = screens[i-1]
             guard let displayId = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")]as? CGDirectDisplayID else {
                 return // Jika tidak bisa mendapatkan displayId, lewati layar ini
             }
             let screenInput = AVCaptureScreenInput(displayID: displayId)
+            screenInput?.minFrameDuration = CMTime(value: 1, timescale: 1)
             let nameFile = "\(fileName)\(i).mp4"
             if let sInput = screenInput {
                 if captureSession.canAddInput(sInput){
